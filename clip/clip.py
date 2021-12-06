@@ -10,7 +10,7 @@ from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from tqdm import tqdm
 
-from .model import build_model
+from .model import build_model, convert_weights
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 try:
@@ -24,7 +24,7 @@ if packaging.version.parse(torch.__version__) < packaging.version.parse("1.7.1")
     warnings.warn("PyTorch version 1.7.1 or higher is recommended")
 
 
-__all__ = ["available_models", "load", "tokenize"]
+__all__ = ["available_models", "load", "tokenize", "export_onnx"]
 _tokenizer = _Tokenizer()
 
 _MODELS = {
@@ -227,3 +227,40 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
         result[i, :len(tokens)] = torch.tensor(tokens)
 
     return result
+
+def export_onnx(model_name: str, batch_size: int = None, opset_version: int = 12):
+    """
+    specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
+    """
+
+    save_path = os.path.expanduser(f"~/.cache/clip/clip_{model_name}.onnx")
+    if os.path.exists(save_path) and os.path.isfile(save_path):
+        print(f"model onnx already exsits in {save_path}, skip export")
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, _ = load(model_name, device=device)
+        image = torch.zeros((batch_size, 3, 224, 224)).half().to(device)
+        text = torch.zeros((batch_size, 77), dtype=torch.int64).to(device)
+        eot_indices = torch.ones((batch_size, ), dtype=torch.int64).to(device)
+
+        dynamic_axes = None if not batch_size else {
+            'input_images': {0: 'batch_size'},
+            'input_texts': {0: 'batch_size'},
+            'eot_indices': {0: 'batch_size'},
+            'image_features': {0: 'batch_size'},
+            'text_features': {0: 'batch_size'}
+        }
+
+        torch.onnx.export(
+            model,
+            (image, text, eot_indices),
+            save_path,
+            export_params=True,
+            opset_version=opset_version,
+            do_constant_folding=True,
+            input_names=['input_images', 'input_texts', 'eot_indices'],
+            output_names=['image_features', 'text_features'],
+            dynamic_axes=dynamic_axes
+        )
+
+    return save_path
