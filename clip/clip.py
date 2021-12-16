@@ -228,12 +228,13 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
 
     return result
 
-def export_onnx(model_name: str, batch_size: int = None, opset_version: int = 12):
+def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, opset_version: int = 12):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
-
-    save_path = os.path.expanduser(f"~/.cache/clip/clip_{model_name}.onnx")
+    if not save_path:
+        batch_str = "dynamic" if not batch_size else str(batch_size)
+        save_path = os.path.expanduser(f"~/.cache/clip/{model_name}_batch_{batch_str}.onnx")
     if os.path.exists(save_path) and os.path.isfile(save_path):
         print(f"model onnx already exsits in {save_path}, skip export")
     else:
