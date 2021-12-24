@@ -229,7 +229,7 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     return result
 
 
-def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess: bool = False):
+def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess=None):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
@@ -242,9 +242,11 @@ def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, 
         batch_size = batch_size if batch_size else 1
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, _ = load(model_name, device=device)
+        res = 224
         if include_preprocess:
             model = PreprocessWrapper(model)
-        image = torch.zeros((batch_size, 3, 224, 224)).to(device)
+            res = int(include_preprocess)
+        image = torch.zeros((batch_size, 3, res, res)).to(device)
         text = torch.zeros((batch_size, 77), dtype=torch.int64).to(device)
         eot_indices = torch.ones((batch_size, ), dtype=torch.int64).to(device)
 
@@ -271,7 +273,7 @@ def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, 
     return save_path
 
 
-def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess: bool = False):
+def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess=None):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
@@ -284,10 +286,12 @@ def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = 
         batch_size = batch_size if batch_size else 1
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, _ = load(model_name, device=device)
+        res = 224
         if include_preprocess:
             model = PreprocessWrapper(model)
+            res = int(include_preprocess)
         model = CLIPImageWrapper(model)
-        image = torch.zeros((batch_size, 3, 224, 224)).to(device)
+        image = torch.zeros((batch_size, 3, res, res)).to(device)
 
         dynamic_axes = None if not batch_size else {
             'input_images': {0: 'batch_size'},
