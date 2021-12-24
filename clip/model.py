@@ -398,7 +398,7 @@ class PreprocessWrapper(nn.Module):
         self.register_buffer('std', std.reshape(1, 3, 1, 1))
     
     def encode_image(self, image):
-        image = nn.functional.interpolate(image, size=self.input_resolution, mode='bicubic', align_corners=False)
+        image = nn.functional.interpolate(image, size=self.input_resolution, mode='bilinear')
         image = (image - self.mean) / self.std
         return self.clip_model.encode_image(image)
 
