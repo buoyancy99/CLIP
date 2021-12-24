@@ -10,7 +10,7 @@ from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from tqdm import tqdm
 
-from .model import CLIPImageWrapper, CLIPTextWrapper, build_model, convert_weights
+from .model import CLIPImageWrapper, CLIPTextWrapper, PreprocessWrapper, build_model, convert_weights
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 try:
@@ -24,7 +24,7 @@ if packaging.version.parse(torch.__version__) < packaging.version.parse("1.7.1")
     warnings.warn("PyTorch version 1.7.1 or higher is recommended")
 
 
-__all__ = ["available_models", "load", "tokenize", "export_onnx", "export_image_onnx", "export_text_onnx"]
+__all__ = ["available_models", "load", "tokenize", "export_onnx", "export_image_onnx", "export_text_onnx", "PreprocessWrapper"]
 _tokenizer = _Tokenizer()
 
 _MODELS = {
@@ -229,7 +229,7 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     return result
 
 
-def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, opset_version: int = 12):
+def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess: bool = False):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
@@ -242,7 +242,9 @@ def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, 
         batch_size = batch_size if batch_size else 1
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, _ = load(model_name, device=device)
-        image = torch.zeros((batch_size, 3, 224, 224)).half().to(device)
+        if include_preprocess:
+            model = PreprocessWrapper(model)
+        image = torch.zeros((batch_size, 3, 224, 224)).to(device)
         text = torch.zeros((batch_size, 77), dtype=torch.int64).to(device)
         eot_indices = torch.ones((batch_size, ), dtype=torch.int64).to(device)
 
@@ -259,7 +261,7 @@ def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, 
             (image, text, eot_indices),
             save_path,
             export_params=True,
-            opset_version=opset_version,
+            opset_version=12,
             do_constant_folding=True,
             input_names=['input_images', 'input_texts', 'eot_indices'],
             output_names=['image_features', 'text_features'],
@@ -269,7 +271,7 @@ def export_onnx(model_name: str, save_path: str = None, batch_size: int = None, 
     return save_path
 
 
-def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = None, opset_version: int = 12):
+def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = None, include_preprocess: bool = False):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
@@ -282,8 +284,10 @@ def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = 
         batch_size = batch_size if batch_size else 1
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, _ = load(model_name, device=device)
+        if include_preprocess:
+            model = PreprocessWrapper(model)
         model = CLIPImageWrapper(model)
-        image = torch.zeros((batch_size, 3, 224, 224)).half().to(device)
+        image = torch.zeros((batch_size, 3, 224, 224)).to(device)
 
         dynamic_axes = None if not batch_size else {
             'input_images': {0: 'batch_size'},
@@ -295,7 +299,7 @@ def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = 
             image,
             save_path,
             export_params=True,
-            opset_version=opset_version,
+            opset_version=12,
             do_constant_folding=True,
             input_names=['input_images'],
             output_names=['image_features'],
@@ -305,7 +309,7 @@ def export_image_onnx(model_name: str, save_path: str = None, batch_size: int = 
     return save_path
 
 
-def export_text_onnx(model_name: str, save_path: str = None, batch_size: int = None, opset_version: int = 12):
+def export_text_onnx(model_name: str, save_path: str = None, batch_size: int = None):
     """
     specify batch_size for a fixed batch size export (useful for tensorrt), otherwise dynamic axes will me used
     """
@@ -333,7 +337,7 @@ def export_text_onnx(model_name: str, save_path: str = None, batch_size: int = N
             (text, eot_indices),
             save_path,
             export_params=True,
-            opset_version=opset_version,
+            opset_version=12,
             do_constant_folding=True,
             input_names=['input_texts', 'eot_indices'],
             output_names=['text_features'],

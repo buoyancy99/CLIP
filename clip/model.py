@@ -385,6 +385,31 @@ class CLIPTextWrapper(nn.Module):
     def forward(self, text, eot_indices):
         return self.clip_model.encode_text(text, eot_indices)
 
+class PreprocessWrapper(nn.Module):
+    def __init__(self, clip_model) -> None:
+        super().__init__()
+        self.clip_model = clip_model
+        self.input_resolution = clip_model.visual.input_resolution
+        mean = torch.Tensor([0.48145466, 0.4578275, 0.40821073])
+        mean = mean.to(clip_model.visual.conv1.weight.device)
+        std = torch.Tensor([0.26862954, 0.26130258, 0.27577711])
+        std = std.to(device=clip_model.visual.conv1.weight.device)
+        self.register_buffer('mean', mean.reshape(1, 3, 1, 1))
+        self.register_buffer('std', std.reshape(1, 3, 1, 1))
+    
+    def encode_image(self, image):
+        image = nn.functional.interpolate(image, size=self.input_resolution, mode='bicubic', align_corners=False)
+        image = (image - self.mean) / self.std
+        return self.clip_model.encode_image(image)
+
+    def encode_text(self, text, eot_indices):
+        return self.clip_model.encode_text(text, eot_indices)
+
+    def forward(self, image, text, eot_indices):
+        image_features = self.encode_image(image)
+        text_features = self.encode_text(text, eot_indices)
+        return image_features, text_features
+
 
 def convert_weights(model: nn.Module, precision=torch.half):
     """Convert applicable model parameters to fp16"""
