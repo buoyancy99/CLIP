@@ -368,6 +368,24 @@ class CLIP(nn.Module):
         return logits_per_image, logits_per_text
 
 
+class CLIPImageWrapper(nn.Module):
+    def __init__(self, clip_model) -> None:
+        super().__init__()
+        self.clip_model = clip_model
+    
+    def forward(self, image):
+        return self.clip_model.encode_image(image)
+
+
+class CLIPTextWrapper(nn.Module):
+    def __init__(self, clip_model) -> None:
+        super().__init__()
+        self.clip_model = clip_model
+    
+    def forward(self, text, eot_indices):
+        return self.clip_model.encode_text(text, eot_indices)
+
+
 def convert_weights(model: nn.Module, precision=torch.half):
     """Convert applicable model parameters to fp16"""
 
